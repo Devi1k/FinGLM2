@@ -12,3 +12,4 @@ venv
 *.doc
 *.docx
 check
+finglm_v1/model_path/*

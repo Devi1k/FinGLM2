@@ -23,14 +23,17 @@ class LLMClient:
         response = self.client.chat.completions.create(
             model=model, stream=False, messages=messages
         )
-        return response
+        return response.choices[0].message.content
 
 
 if __name__ == "__main__":
     client = LLMClient()
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Please generate a random number between 1 and 10."},
+        {
+            "role": "user",
+            "content": "Please generate a random number between 1 and 10.",
+        },
     ]
     response = client.generate(messages)
     print(response)
