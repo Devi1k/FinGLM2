@@ -1,13 +1,16 @@
 from pydantic import fields
-from typing import List
+from typing import List, Dict
 import json
 import re
 
 
 class ParserAgent:
-    def __init__(self, llm_client, vector_store):
+    def __init__(self, llm_client, vector_store, data_frame, table_dict, table_name_map):
         self.llm = llm_client
         self.vector_store = vector_store
+        self.data_frame = data_frame
+        self.table_dict = table_dict
+        self.table_name_map = table_name_map
 
     def _rewrite_question(self, question: str, context: dict) -> str:
         """Rewrite the question using context."""
@@ -18,8 +21,6 @@ class ParserAgent:
         ]
         rewrite_response = self.llm.generate(messages)
         return rewrite_response
-
-    
 
     def parse(
         self, question: str, context: dict, table_representation: List[str]
@@ -46,22 +47,68 @@ class ParserAgent:
         # 解析响应
         understanding = self.parse_understanding(response)
 
-        # TODO: 读取表schema，再次生成需要的对应 field
-        prompt = self.build_fields_prompt(understanding["table"])
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": ""},
-        ]
-        response = self.llm.generate(messages)
-        fields = self.parse_fields(response)
+        # 读取表schema，再次生成需要的对应 field
+        # prompt = self.build_fields_prompt(question, understanding["table"])
+        # messages = [
+        #     {"role": "system", "content": prompt},
+        #     {"role": "user", "content": ""},
+        # ]
+        # response = self.llm.generate(messages)
+        # fields = self.parse_understanding(response)
+
+        # 从all_tables_schema中提取表结构信息
+        table_info = {}
+        current_table = None
+        lines = self.all_tables_schema.split('\n')
+        
+        for line in lines:
+            # 处理表头
+            if line.startswith('==='):
+                # 提取表名
+                table_name = line.split()[0][4:]  # 去掉=== 获取表名
+                current_table = table_name
+                table_info[current_table] = {
+                    'fields': []
+                }
+                continue
+
+            # 跳过列标题行和分隔线
+            if not current_table or '注释' in line or '-' * 20 in line or not line.strip():
+                continue
+
+            # 解析字段行
+            parts = line.split(None, 2) # 按空格分割,最多分2次
+            if len(parts) >= 2:
+                field_name = parts[0].strip()
+                field_comment = parts[1].strip()
+                
+                table_info[current_table]['fields'].append({
+                    'field': field_name,
+                    'comment': field_comment  
+                })
+                
+        simplified_fields = {}
+        # 根据理解的表和字段生成需要的fields
+        for table in understanding["table"]:
+            table_name = table["name"]
+            if table_name in self.table_name_map:
+                table_name_en = self.table_name_map[table_name]
+                # 获取表的字段信息
+                if table_name_en in table_info:
+                    for field in table_info[table_name_en]['fields']:
+                        simplified_fields['table_name'] = {
+                            'field_name': field['field'],
+                            'field_comment': field['comment']
+                        }
+
 
         return {
             "table": understanding["table"],
             "entities": understanding["entities"],
-            "fields": fields["fields"],
+            "fields": simplified_fields
         }
     
-    def build_fields_prompt(self, table_name: str) -> str:
+    def build_fields_prompt(self, question: str, table_list: List[str]) -> str:
         # 根据表名包含生成字段抽取所需的必要字段
         prompt = """任务：根据用户查询和给定的表结构信息，选择相关字段
 
@@ -69,9 +116,10 @@ class ParserAgent:
 你是一个专业的数据分析助手，擅长理解用户意图并从复杂的数据结构中选择最相关的字段。你会进行多轮思考，每一轮都可能发现新的见解。
 
 输入信息：
-1. 用户查询: {query}
+1. 用户查询: <<query>>
 2. 表结构信息：
-{tables_info}
+<<tables_info>>
+
 格式为：{
     "table1": {
         "description": "表的描述",
@@ -118,11 +166,7 @@ class ParserAgent:
    - 补充必要的关联字段
    - 移除冗余字段
 
-第三轮思考：
-1. 验证和优化
-   - 确认字段组合的完整性
-   - 验证是否满足查询目标
-   - 检查是否有更优选择
+...
 
 输出要求：
 必须输出标准的 JSON 格式，包含以下内容：
@@ -130,7 +174,7 @@ class ParserAgent:
     "thinking_process": {
         "round1": {
             "keywords": ["关键词1", "关键词2", ...],
-            "initial_findings": "初步发现描述",
+            "initial_findings": "初步发现描述", 
             "selected_tables": ["表1", "表2", ...]
         },
         "round2": {
@@ -138,10 +182,7 @@ class ParserAgent:
             "field_relationships": "字段关系分析",
             "adjustments": "调整说明"
         },
-        "round3": {
-            "validation_results": "验证结果描述",
-            "optimization_notes": "优化说明"
-        }
+        ...
     },
     "selected_fields": {
         "table_name1": {
@@ -156,25 +197,47 @@ class ParserAgent:
         "table_name2": {
             "fields": [
                 {
-                    "field_name": "字段名1",
+                    "field_name": "字段名1", 
                     "reason": "选择理由"
                 },
                 ...
             ]
         }
-    },
-    "status": "FIELD_SELECTION_COMPLETE"
+    }
 }
+
+<|finish|>
 
 注意：
 1. 输出必须是合法的 JSON 格式
 2. 所有字段名和表名必须与输入信息中的名称完全匹配
 3. 必须包含完整的思考过程记录
-4. status 字段必须为 "FIELD_SELECTION_COMPLETE"
+4. 输出完成请以 <|finish|> 结束
 """
-        
+        # 构造 table_info 
+        table_info = {}
+        for table_name in table_list:
+            
+            # 获取库表名英文
+            table_name_en = self.table_name_map[table_name]
+            # 获取表描述
+            description = self.data_frame.set_index('库表名中文')['表描述'].to_dict().get(table_name, "")
+            # 获取字段信息
+            table_fields = self.table_dict.get(table_name_en, [])
+            
+            table_info[table_name] = {
+                "description": description,
+                "fields": [
+                    {"field": field["name"], "description": field["comment"]}
+                    for field in table_fields
+                ]
+            }
+
+        # 拼接 prompt，替换 <<query>> 和 <<tables_info>>
+        prompt = prompt.replace(
+            "<<query>>", question
+        ).replace("<<tables_info>>", json.dumps(table_info, ensure_ascii=False, indent=2))
         return prompt
-        
 
     def build_understanding_prompt(self, question: str, table_list: List[str]) -> str:
 
@@ -213,11 +276,8 @@ class ParserAgent:
         prompt = prompt_template.replace(
             "<<table_list>>", " ".join(table_list)
         ).replace("<<question>>", question)
-        
+
         return prompt
-
-
-    
 
     def build_rewrite_prompt(self, question: str, context: dict) -> str:
         context_list = context.get("history", [])
@@ -277,7 +337,7 @@ class ParserAgent:
             # 尝试解析JSON字符串
             data = json.loads(json_str)
 
-            # 提取表和实体信息
+            # 提取表、实体和字段信息
             result = {
                 "table": [
                     {"name": table["table_name"], "reason": table["reason"]}
@@ -290,3 +350,11 @@ class ParserAgent:
         except (json.JSONDecodeError, AttributeError, KeyError) as e:
             # 任何解析错误都返回空结果
             return get_empty_result()
+
+if __name__ == "__main__":
+    # TODO 完成单元测试
+    parser_agent = ParserAgent(None, None, None, None, None)
+    question = "查询近一个月最高价"
+    context = {
+        "history": ["用户：查询近一个月最高价", "助手：好的，请稍等，正在查询中..."]
+    }

@@ -11,6 +11,11 @@ class FinanceQASystem:
     def __init__(self):
         self.data_dictionary_path = "assets/data_dictionary.xlsx"
         self.all_tables_schema_path = "assets/all_tables_schema.txt"
+
+        self._initialize_components()
+
+    def _initialize_components(self):
+        """初始化各个组件"""
         self.df1 = pd.read_excel(self.data_dictionary_path, sheet_name="库表关系")
         self.df1["库表名中文"] = self.df1["库名中文"] + "." + self.df1["表中文"]
         self.df1["库表名英文"] = self.df1["库名英文"] + "." + self.df1["表英文"]
@@ -19,14 +24,21 @@ class FinanceQASystem:
         self.df1["representation"] = (
             "库表名：" + self.df1["库表名中文"] + "，注释：" + self.df1["表描述"]
         )
-        self.database_table_map = self.df1.set_index("库表名中文")["库表名英文"].to_dict()
+        self.database_table_map = self.df1.set_index("库表名中文")[
+            "库表名英文"
+        ].to_dict()
+        with open(self.all_tables_schema_path, "r") as f:
+            self.all_tables_schema = f.read()
+        
 
         self.llm = LLMClient()  # LLM API客户端
         self.dialogue_manager = DialogueManager()  # 对话管理
         self.vector_store = TableVectorStore(
             list(self.df1["representation"])
         )  # 内存向量存储
-        self.parser_agent = ParserAgent(self.llm, self.vector_store)  # 问题理解
+        self.parser_agent = ParserAgent(
+            self.llm, self.vector_store, self.df1, self.all_tables_schema
+        )  # 问题理解
         self.sql_agent = SQLAgent(self.llm)  # SQL生成
         self.answer_agent = AnswerAgent(self.llm)  # 答案生成
 
@@ -36,7 +48,7 @@ class FinanceQASystem:
 
         # 2. 理解问题
         understanding = self.parser_agent.parse(
-            question, context, self.df1['representation'].tolist()
+            question, context, self.df1["representation"].tolist()
         )
 
         # 3. 生成查询
