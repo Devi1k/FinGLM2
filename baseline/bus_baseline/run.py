@@ -864,7 +864,7 @@ def run_conversation_until_complete(messages, max_rounds=6):
         response = create_chat_completion(messages)
 
         last_response = response.choices[0].message.content  # 存储最后一次响应       
-        if "全部完成" in response.choices[0].message.content:
+        if "全部完成" in response.choices[0].message.content: # pyright: ignore
             break  # 如果检测到“回答完成”，则停止循环
         round_count += 1  # 增加对话轮数计数
     return last_response  # 返回最后一次对话的内容
@@ -1046,7 +1046,7 @@ def run_conversation_xietong(question):
     messages.append({"role": "user", "content": "您好阿"})
     messages.append({"role": "user", "content": content_p})
     response = create_chat_completion(messages)
-    if "全部完成" in response.choices[0].message.content:
+    if "全部完成" in response.choices[0].message.content: # pyright: ignore
         return response.choices[0].message.content  # 如果检测到“回答完成”，则停止循环
     messages.append({"role": "assistant", "content": response.choices[0].message.content})
     table_maps = get_table_schema(question)
