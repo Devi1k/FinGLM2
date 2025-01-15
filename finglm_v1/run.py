@@ -3,6 +3,8 @@
 
 This script runs the FinanceQASystem with concurrent question processing.
 """
+import sys
+print(sys.path)
 import json
 import asyncio
 import logging
@@ -56,7 +58,7 @@ class QuestionProcessor:
         # 创建每个TID的处理任务
         tasks = [
             self.process_single_tid(item["tid"], item["team"])
-            for item in data
+            for item in data[:10]
         ]
         
         # 并发执行所有TID的处理
@@ -193,4 +195,5 @@ async def main() -> None:
         raise
 
 if __name__ == "__main__":
+    
     asyncio.run(main())
