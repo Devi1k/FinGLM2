@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # 基础路径配置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
     ASSETS_DIR: Path = BASE_DIR / "assets"
+
+    # 系统配置
+    MAX_WORKERS: int = 8
     
     # 数据文件路径
     DATA_DICTIONARY_PATH: Path = ASSETS_DIR / "data_dictionary.xlsx"
@@ -29,6 +32,7 @@ class Settings(BaseSettings):
     DB_ACCESS_TOKEN: str = ""
     
     # 向量存储配置
+    VECTOR_STORE_MODEL: str = "Conan-embedding-v1"
     VECTOR_STORE_TYPE: str = "faiss"
     VECTOR_STORE_PATH: Path = BASE_DIR / "vector_store"
     

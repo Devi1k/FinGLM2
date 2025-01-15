@@ -128,7 +128,7 @@ class ParserAgent:
         for line in schema_text.split("\n"):
             # 处理表头
             if line.startswith("==="):
-                table_name = line.split()[0][4:]
+                table_name = line.split(" ")[1]
                 current_table = table_name
                 schemas[current_table] = TableInfo(
                     chinese_name="",  # 从数据字典中补充
@@ -329,13 +329,13 @@ class ParserAgent:
             logger.debug(f"Rewritten question: {rewritten_question}")
 
             # 2. 相关表识别
-            search_results = self.vector_store.search(rewritten_question)
+            search_results = self.vector_store.search(rewritten_question, k=25)
             relevant_tables = []
 
             for result in search_results:
                 idx = result.index  # 使用 VectorSearchResult 的 index 属性
-                table_name_en = self.data_dictionary["库表名英文"].iloc[idx]
-                table_name_cn = self.data_dictionary["库表名"].iloc[idx]
+                table_name_en = self.data_dictionary["库表名英文"].iloc[idx].lower()
+                table_name_cn = self.data_dictionary["库表名中文"].iloc[idx]
                 table_desc = self.data_dictionary["表描述"].iloc[idx]
 
                 if table_name_en in self.table_schemas:

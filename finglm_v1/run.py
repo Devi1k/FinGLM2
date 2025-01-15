@@ -3,8 +3,6 @@
 
 This script runs the FinanceQASystem with concurrent question processing.
 """
-import sys
-print(sys.path)
 import json
 import asyncio
 import logging
@@ -176,7 +174,7 @@ async def main() -> None:
     try:
         setup_logging()
         logger.info("Starting question processing...")
-        
+
         # 读取问题文件
         question_file = Path("assets/question.json")
         with open(question_file, "r", encoding="utf-8") as f:
@@ -189,11 +187,14 @@ async def main() -> None:
         # 保存结果
         output_file = processor.save_results(results)
         logger.info(f"Processing completed. Results saved to {output_file}")
-        
+
     except Exception as e:
         logger.error(f"Processing failed: {str(e)}")
         raise
 
 if __name__ == "__main__":
+    # 设置日志级别
+    logging.basicConfig(level=logging.INFO)
     
+    # 运行异步主函数
     asyncio.run(main())

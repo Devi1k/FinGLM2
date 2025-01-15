@@ -12,4 +12,4 @@ venv
 *.doc
 *.docx
 check
-finglm_v1/model_path/*
+finglm_v1/model_path/Conan-embedding-v1

@@ -19,8 +19,7 @@ from tenacity import (
     retry_if_exception_type
 )
 from zhipuai import ZhipuAI
-from zhipuai.types.chat.chat_completion import ChatCompletion
-
+from zhipuai.types.chat.chat_completion import Completion
 from finglm_v1.config.settings import settings
 from finglm_v1.core.types import LLMError
 
@@ -43,10 +42,10 @@ class ChatResponse(BaseModel):
     usage: Dict[str, int] = Field(default_factory=dict, description="token使用统计")
     
     @classmethod
-    def from_zhipuai_response(cls, response: ChatCompletion) -> "ChatResponse":
+    def from_zhipuai_response(cls, response: Completion) -> "ChatResponse":
         """从智谱AI响应创建ChatResponse实例"""
         return cls(
-            content=response.choices[0].message.content,
+            content=response.choices[0].message.content, # pyright: ignore
             role=response.choices[0].message.role,
             finish_reason=response.choices[0].finish_reason,
             usage=response.usage.model_dump()
@@ -92,9 +91,6 @@ class LLMClient:
             self.model = model or settings.LLM_MODEL
             self.max_retries = max_retries
             
-            # 设置缓存装饰器
-            self.generate = lru_cache(maxsize=cache_size)(self.generate)
-            
             logger.info(
                 f"Initialized LLMClient with model={self.model}, "
                 f"max_retries={max_retries}, cache_size={cache_size}"
@@ -114,9 +110,12 @@ class LLMClient:
         """
         # 将消息和参数序列化为JSON字符串
         cache_data = {
-            "messages": [msg.model_dump() for msg in messages],
+            "messages": [
+                msg.model_dump() if isinstance(msg, Message) 
+                else msg for msg in messages
+            ],
             "model": self.model,
-            **kwargs
+            **{k: v for k, v in kwargs.items() if isinstance(v, (str, int, float, bool, type(None)))}
         }
         cache_str = json.dumps(cache_data, sort_keys=True)
         
@@ -164,21 +163,23 @@ class LLMClient:
                     processed_messages.append(msg)
             
             # 记录请求
-            logger.debug(
+            logger.info(
                 f"Generating response for messages={processed_messages}, "
                 f"temperature={temperature}, top_p={top_p}"
             )
             
-            # 异步调用LLM
-            async with asyncio.timeout(timeout):
-                response = await asyncio.to_thread(
-                    self.client.chat.completions.create,
+            # 异步调用 LLM
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
                     model=self.model,
                     messages=[msg.model_dump() for msg in processed_messages],
                     temperature=temperature,
                     top_p=top_p,
+                    timeout=timeout,
                     **kwargs
-                )
+                ),
+                timeout=timeout
+            )
             
             # 转换响应
             chat_response = ChatResponse.from_zhipuai_response(response)
@@ -228,3 +229,5 @@ class LLMClient:
         messages.append(Message(role="user", content=user_message)) # pyright: ignore
         
         return await self.generate(messages) # pyright: ignore
+
+

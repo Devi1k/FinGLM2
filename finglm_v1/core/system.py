@@ -141,8 +141,9 @@ class FinanceQASystem:
             for iter in range(max_iteration):
                 # 2. 理解问题
                 understanding = await self.parser_agent.parse(question, context)
+                logger.debug(f"Question understanding: {understanding}")
 
-                # 3. 生成查询
+                # 3. SQL生成
                 sql = await self.sql_agent.generate_sql(question, understanding)
 
                 # 4. 执行查询
@@ -154,7 +155,7 @@ class FinanceQASystem:
                 if "<|FINISH|>" in answer:
                     answer = answer.split("<|FINISH|>")[0]
                     break
-                
+
                 # 6. 更新对话历史
                 await self.dialogue_manager.update_history(question_id, question, answer)
 
@@ -162,5 +163,5 @@ class FinanceQASystem:
             return answer
 
         except Exception as e:
-            logger.error(f"Error processing question {question_id}: {str(e)}")
-            raise
+            logger.error(f"Failed to process question: {str(e)}")
+            return f"抱歉，处理您的问题时出现错误: {str(e)}"
