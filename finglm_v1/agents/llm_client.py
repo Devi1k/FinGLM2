@@ -138,9 +138,9 @@ class LLMClient:
         self,
         messages: List[Union[Message, Dict[str, str]]],
         *,
-        temperature: float = 0.7,
+        temperature: float = 0.1,
         top_p: float = 0.9,
-        timeout: float = 30.0,
+        timeout: float = 90.0,
         **kwargs: Any
     ) -> ChatResponse:
         """生成LLM响应
@@ -169,10 +169,10 @@ class LLMClient:
                     processed_messages.append(msg)
             
             # 记录请求
-            logger.info(
-                f"Generating response for messages={processed_messages}, "
-                f"temperature={temperature}, top_p={top_p}"
-            )
+            # logger.info(
+            #     f"Generating response for messages={processed_messages}, "
+            #     f"temperature={temperature}, top_p={top_p}"
+            # )
             
             # 异步调用 LLM
             loop = asyncio.get_running_loop()

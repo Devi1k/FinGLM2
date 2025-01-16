@@ -30,14 +30,13 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4/"
 
     # 数据库配置
-    DB_ACCESS_TOKEN: str = ""
+    DB_ACCESS_TOKEN: str = "3a6ab7f347954c9e96a5092b1b45d2c3"
     
     # 向量存储配置
     VECTOR_STORE_MODEL: str = "Conan-embedding-v1"
     VECTOR_STORE_TYPE: str = "faiss"
     VECTOR_STORE_PATH: Path = BASE_DIR / "vector_store"
 
-    DATABASE_ACCESS_TOKEN: str = "3a6ab7f347954c9e96a5092b1b45d2c3"
     
     # 日志配置
     LOG_LEVEL: str = "INFO"

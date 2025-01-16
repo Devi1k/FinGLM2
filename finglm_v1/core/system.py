@@ -133,7 +133,7 @@ class FinanceQASystem:
         """
         logger.info(f"Processing question {question_id}: {question}")
         max_iteration = 3
-        answer = ''
+        answer = ""
         try:
             # 1. 获取上下文
             if context is None:
@@ -145,19 +145,24 @@ class FinanceQASystem:
 
                 # 3. SQL生成
                 sql = await self.sql_agent.generate_sql(question, understanding)
-
+                logger.info(f"Generated SQL: {sql}")
                 # 4. 执行查询
                 data = self.db.execute(sql)
-
+                logger.info(f"Query result: {data}")
                 # 5. 生成答案
-                answer = await self.answer_agent.generate_answer(data, understanding)
+                answer = await self.answer_agent.generate_answer(
+                    data, sql, understanding
+                )
+                logger.info(f"Generated answer: {answer}")
 
                 if "<|FINISH|>" in answer:
                     answer = answer.split("<|FINISH|>")[0]
                     break
 
                 # 6. 更新对话历史
-                await self.dialogue_manager.update_history(question_id, question, answer)
+                await self.dialogue_manager.update_history(
+                    question_id, question, answer
+                )
 
             logger.info(f"Successfully processed question {question_id}")
             return answer

@@ -9,10 +9,13 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+import concurrent.futures
+from functools import partial
 
 from finglm_v1.config.settings import settings
 from finglm_v1.core.types import QuestionContext
 from finglm_v1.core.system import FinanceQASystem
+from finglm_v1.utils.database import DatabaseClient
 from finglm_v1.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -44,38 +47,51 @@ class QuestionProcessor:
         self.output_dir = output_dir or Path("outputs")
         self.output_dir.mkdir(exist_ok=True)
         
-    async def process_all_tids(self, data: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    async def process_all_tids(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """并发处理所有TID组
         
         Args:
             data: 问题数据，包含多个TID组
             
         Returns:
-            Dict[str, List[Dict[str, Any]]]: 处理结果，按TID组织
+            List[Dict[str, Any]]: 处理结果，每个元素包含tid和对应的问题答案列表
         """
-        # 创建每个TID的处理任务
-        tasks = [
-            self.process_single_tid(item["tid"], item["team"])
-            for item in data[:10]
-        ]
+        loop = asyncio.get_event_loop()
+        processed_results = []
         
-        # 并发执行所有TID的处理
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # 创建线程池
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            # 创建每个TID的处理任务
+            futures = []
+            for item in data[:10]:
+                future = loop.run_in_executor(
+                    executor,
+                    partial(
+                        asyncio.run,
+                        self.process_single_tid(item["tid"], item["team"])
+                    )
+                )
+                futures.append((item["tid"], item["team"], future))
+            
+            # 等待所有任务完成
+            for tid, questions, future in futures:
+                try:
+                    result = await future
+                    processed_results.append({
+                        "tid": tid,
+                        "team": result
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to process TID {tid}: {str(e)}")
+                    processed_results.append({
+                        "tid": tid,
+                        "team": [{
+                            "id": q["id"],
+                            "question": q["question"],
+                            "answer": f"处理失败: {str(e)}"
+                        } for q in questions]
+                    })
         
-        # 整理结果
-        processed_results = {}
-        for tid_data, result in zip(data, results):
-            tid = tid_data["tid"]
-            if isinstance(result, Exception):
-                logger.error(f"Failed to process TID {tid}: {str(result)}")
-                processed_results[tid] = [{
-                    "id": q["id"],
-                    "question": q["question"],
-                    "answer": f"处理失败: {str(result)}"
-                } for q in tid_data["team"]]
-            else:
-                processed_results[tid] = result
-                
         return processed_results
         
     async def process_single_tid(
@@ -151,11 +167,11 @@ class QuestionProcessor:
             logger.error(f"Error processing question {question_id}: {str(e)}")
             raise
             
-    def save_results(self, results: Dict[str, List[Dict[str, Any]]]) -> Path:
+    def save_results(self, results: List[Dict[str, Any]]) -> Path:
         """保存处理结果
         
         Args:
-            results: 处理结果，按TID组织
+            results: 处理结果列表，每个元素包含tid和对应的问题答案列表
             
         Returns:
             Path: 保存的文件路径

@@ -92,6 +92,7 @@ class AnswerGenerator:
     async def generate_answer(
         self,
         data: Dict[str, Any],
+        sql: str,
         understanding: QuestionUnderstanding
     ) -> str:
         """生成答案
@@ -120,7 +121,7 @@ class AnswerGenerator:
                 f"{json.dumps(data, indent=2)}\n\n"
 
                 "SQL QUERY:\n"
-                f"{understanding.sql}\n\n"
+                f"{sql}\n\n"
 
                 "QUERY RESULT:\n"
                 f"{self._format_data(pd.DataFrame(data))}\n\n"

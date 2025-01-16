@@ -3,6 +3,7 @@ SQL生成代理模块
 
 This module provides SQL generation capabilities based on natural language understanding.
 """
+import re
 from typing import List, Dict, Any, Optional
 import logging
 import json
@@ -95,14 +96,13 @@ class SQLGenerator:
                 "问题理解：\n"
                 f"{understanding.model_dump_json(indent=2)}\n\n"
                 "要求：\n"
-                "1. 生成标准的SQL查询语句\n"
+                "1. 仅生成标准的SQL查询语句，请不要使用任何自然语言解释。\n"
                 "2. 使用正确的表和字段名\n"
                 "3. 确保查询性能\n"
                 "4. 处理好表之间的关联\n\n"
                 "5. 查询年度报告时禁止使用 GROUP BY InnerCode\n"
                 "6. 时间字段使用 DATE() 函数进行比较\n"
                 "7. 优先使用已有的统计字段而不是自行计算\n\n"
-                "8. 只需要输出SQL语句，不需要其他解释。"
                 "查询参考：\n"
                 "1. 查询近一个月最高价时，优先使用 HighPriceRM (近一月最高价(元)) 字段\n"
                 "2. 查询近一月最低价时，直接使用 LowPriceRM 字段\n"
@@ -138,7 +138,16 @@ class SQLGenerator:
             
 
             sql = response.content.strip()
+            # 使用正则表达式处理模型生成的SQL语句
+            sql_pattern = r'```sql\s*([\s\S]*?)\s*```'
+            match = re.search(sql_pattern, sql, re.IGNORECASE)
+            if match:
+                sql = match.group(1).strip()
+            else:
+                # 如果没有找到markdown格式的SQL，则假设整个响应就是SQL
+                sql = sql.strip()
             
+
             # 验证SQL（可以添加更多验证逻辑）
             # if not sql.lower().startswith("select"):
             #     raise ValueError("Generated SQL must be a SELECT statement")
