@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     ALL_TABLES_SCHEMA_PATH: Path = ASSETS_DIR / "all_tables_schema.txt"
     
     # LLM配置
-    LLM_API_KEY: str = "d25e7ccdd599490bb3113ad6ac8e515f.G0cQzHFMidedbXF5"
+    LLM_API_KEY: str = "e505e01b08f94aa1adb66f0930050523.3GREH5cSdPoASBcI"
     LLM_MODEL: str = "glm-4-plus"
+    LLM_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4/"
 
     # 数据库配置
     DB_ACCESS_TOKEN: str = ""
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
     VECTOR_STORE_MODEL: str = "Conan-embedding-v1"
     VECTOR_STORE_TYPE: str = "faiss"
     VECTOR_STORE_PATH: Path = BASE_DIR / "vector_store"
+
+    DATABASE_ACCESS_TOKEN: str = "3a6ab7f347954c9e96a5092b1b45d2c3"
     
     # 日志配置
     LOG_LEVEL: str = "INFO"

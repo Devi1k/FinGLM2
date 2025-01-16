@@ -19,6 +19,7 @@ from tenacity import (
     retry_if_exception_type
 )
 from zhipuai import ZhipuAI
+from openai import OpenAI
 from zhipuai.types.chat.chat_completion import Completion
 from finglm_v1.config.settings import settings
 from finglm_v1.core.types import LLMError
@@ -42,13 +43,18 @@ class ChatResponse(BaseModel):
     usage: Dict[str, int] = Field(default_factory=dict, description="token使用统计")
     
     @classmethod
-    def from_zhipuai_response(cls, response: Completion) -> "ChatResponse":
-        """从智谱AI响应创建ChatResponse实例"""
+    def from_openai_response(cls, response) -> "ChatResponse":
+        """从OpenAI响应创建ChatResponse实例"""
+        choice = response.choices[0]
         return cls(
-            content=response.choices[0].message.content, # pyright: ignore
-            role=response.choices[0].message.role,
-            finish_reason=response.choices[0].finish_reason,
-            usage=response.usage.model_dump()
+            content=choice.message.content,
+            role=choice.message.role,
+            finish_reason=choice.finish_reason,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
         )
 
 class LLMClient:
@@ -87,7 +93,7 @@ class LLMClient:
             LLMError: 初始化失败时抛出
         """
         try:
-            self.client = ZhipuAI(api_key=api_key or settings.LLM_API_KEY)
+            self.client = OpenAI(api_key=api_key or settings.LLM_API_KEY,base_url=settings.LLM_BASE_URL)
             self.model = model or settings.LLM_MODEL
             self.max_retries = max_retries
             
@@ -169,20 +175,24 @@ class LLMClient:
             )
             
             # 异步调用 LLM
+            loop = asyncio.get_running_loop()
             response = await asyncio.wait_for(
-                self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[msg.model_dump() for msg in processed_messages],
-                    temperature=temperature,
-                    top_p=top_p,
-                    timeout=timeout,
-                    **kwargs
+                loop.run_in_executor(
+                    None,
+                    lambda: self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[msg.model_dump() for msg in processed_messages],
+                        temperature=temperature,
+                        top_p=top_p,
+                        timeout=timeout,
+                        **kwargs
+                    )
                 ),
                 timeout=timeout
             )
             
             # 转换响应
-            chat_response = ChatResponse.from_zhipuai_response(response)
+            chat_response = ChatResponse.from_openai_response(response)
             
             # 记录响应
             logger.debug(
@@ -231,3 +241,21 @@ class LLMClient:
         return await self.generate(messages) # pyright: ignore
 
 
+if __name__ == "__main__":
+    # 测试 LLMClient 的 generate 功能
+    async def test_generate():
+        llm_client = LLMClient(model="glm-4-flash", api_key=settings.LLM_API_KEY)
+        messages = [
+            Message(role="system", content="You are a helpful assistant."),
+            Message(role="user", content="What is the capital of France?")
+        ]
+        
+        try:
+            response = await llm_client.generate(messages)
+            print(f"Generated response: {response.content}")
+            print(f"Usage: {response.usage}")
+        except LLMError as e:
+            print(f"Error occurred: {e}")
+
+    # 运行测试
+    asyncio.run(test_generate())
